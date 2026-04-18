@@ -186,13 +186,16 @@ class JudgeLLMClient:
         """
         system_prompt = (
             "You are evaluating whether a conversation achieved its goal.\n\n"
-            f"PERSONA: {persona}\n\n"
             f"GOAL: {goal}\n\n"
-            "Review the conversation and determine if the goal was successfully achieved.\n"
-            "Respond with a JSON object with these fields:\n"
-            '- "success": boolean - true if the goal was achieved, false otherwise\n'
-            '- "explanation": string - brief explanation of why the goal was or was not achieved\n\n'
-            "Respond ONLY with the JSON object, no other text."
+            "Review the conversation and determine if the goal was achieved.\n\n"
+            "In your explanation, briefly describe:\n"
+            "- What the customer asked for\n"
+            "- What the agent did\n"
+            "- Whether the goal was fulfilled and why\n\n"
+            "Respond with ONLY valid JSON:\n"
+            '{"success": true, "explanation": "The customer asked for X. The agent provided Y, which fulfills the goal."}\n'
+            "or\n"
+            '{"success": false, "explanation": "The customer asked for X. The agent did Y, but the goal was not met because Z."}'
         )
 
         messages = [{"role": "system", "content": system_prompt}]

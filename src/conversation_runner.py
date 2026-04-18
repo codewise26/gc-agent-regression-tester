@@ -109,7 +109,7 @@ class ConversationRunner:
                     attempt_number=attempt_number,
                     success=True,
                     conversation=conversation,
-                    explanation=evaluation.explanation,
+                    explanation=f"Goal achieved after {turn_count} turn(s). {evaluation.explanation}",
                 )
 
             # Reached max turns — do final evaluation
@@ -119,19 +119,28 @@ class ConversationRunner:
                 conversation_history=conversation,
             )
 
-            return AttemptResult(
-                attempt_number=attempt_number,
-                success=evaluation.success,
-                conversation=conversation,
-                explanation=evaluation.explanation,
-            )
+            if evaluation.success:
+                return AttemptResult(
+                    attempt_number=attempt_number,
+                    success=True,
+                    conversation=conversation,
+                    explanation=f"Goal achieved at max turns ({turn_count}). {evaluation.explanation}",
+                )
 
-        except TimeoutError as e:
             return AttemptResult(
                 attempt_number=attempt_number,
                 success=False,
                 conversation=conversation,
-                explanation="Attempt failed due to timeout",
+                explanation=f"Goal NOT achieved after {turn_count} turn(s) (max: {self.max_turns}). {evaluation.explanation}",
+            )
+
+        except TimeoutError as e:
+            timeout_stage = "welcome message" if not conversation else "agent response"
+            return AttemptResult(
+                attempt_number=attempt_number,
+                success=False,
+                conversation=conversation,
+                explanation=f"Timed out waiting for {timeout_stage} after {len(conversation)} message(s) in the conversation.",
                 error=str(e),
             )
         except WebMessagingError as e:
@@ -139,7 +148,7 @@ class ConversationRunner:
                 attempt_number=attempt_number,
                 success=False,
                 conversation=conversation,
-                explanation="Attempt failed due to web messaging error",
+                explanation=f"Connection error with Genesys Cloud after {len(conversation)} message(s). Check deployment ID and region.",
                 error=str(e),
             )
         except JudgeLLMError as e:
@@ -147,7 +156,7 @@ class ConversationRunner:
                 attempt_number=attempt_number,
                 success=False,
                 conversation=conversation,
-                explanation="Attempt failed due to Judge LLM error",
+                explanation=f"The judge LLM failed to produce a valid response after {len(conversation)} message(s). This is usually a model issue — try a larger model.",
                 error=str(e),
             )
         finally:

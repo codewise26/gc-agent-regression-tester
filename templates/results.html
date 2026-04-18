@@ -102,6 +102,14 @@
 
     <!-- Live results container (populated by SSE) -->
     <div id="live-results" style="display:none;">
+        <div id="running-banner" style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:4px;padding:1rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;">
+            <div style="width:24px;height:24px;border:3px solid #ffe0b2;border-top:3px solid #e65100;border-radius:50%;animation:spin 1s linear infinite;flex-shrink:0;"></div>
+            <div>
+                <div style="font-weight:600;color:#e65100;">Tests running...</div>
+                <div style="font-size:0.85rem;color:#666;">Elapsed: <span id="elapsed-time">0s</span> &middot; <span id="running-status">Starting</span></div>
+            </div>
+        </div>
+        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         <div class="report-header">
             <h2 id="live-suite-name">Running...</h2>
             <div class="stats">
@@ -120,6 +128,33 @@
         var totalAttempts = 0, totalSuccesses = 0, totalFailures = 0;
         var currentScenario = null;
         var sseActive = false;
+        var startTime = null;
+        var timerInterval = null;
+
+        function startTimer() {
+            startTime = Date.now();
+            timerInterval = setInterval(function() {
+                var elapsed = Math.floor((Date.now() - startTime) / 1000);
+                var mins = Math.floor(elapsed / 60);
+                var secs = elapsed % 60;
+                var text = mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
+                document.getElementById('elapsed-time').textContent = text;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+        }
+
+        function updateRunningStatus(text) {
+            var el = document.getElementById('running-status');
+            if (el) el.textContent = text;
+        }
+
+        function hideBanner() {
+            var banner = document.getElementById('running-banner');
+            if (banner) banner.style.display = 'none';
+        }
 
         function startSSE() {
             var evtSource = new EventSource('/progress');
@@ -128,16 +163,19 @@
             // Hide static content, show live container
             document.getElementById('static-results').style.display = 'none';
             document.getElementById('live-results').style.display = 'block';
+            startTimer();
 
             evtSource.onmessage = function(event) {
                 var data = JSON.parse(event.data);
 
                 if (data.event_type === 'suite_started') {
                     document.getElementById('live-suite-name').textContent = data.message;
+                    updateRunningStatus('Suite started');
                 }
 
                 if (data.event_type === 'scenario_started') {
                     currentScenario = data.scenario_name;
+                    updateRunningStatus('Running: ' + data.scenario_name);
                     var h3 = document.createElement('h3');
                     h3.id = 'scenario-header-' + currentScenario.replace(/\s+/g, '-');
                     h3.textContent = currentScenario;
@@ -148,6 +186,7 @@
                     totalAttempts++;
                     if (data.success) { totalSuccesses++; } else { totalFailures++; }
                     updateStats();
+                    updateRunningStatus('Running: ' + data.scenario_name + ' (attempt ' + data.attempt_number + ' done)');
                     renderAttempt(data.scenario_name, data.attempt_result);
                 }
 
@@ -162,6 +201,8 @@
                 if (data.event_type === 'suite_completed') {
                     evtSource.close();
                     sseActive = false;
+                    stopTimer();
+                    hideBanner();
                     document.getElementById('live-suite-name').textContent += ' — Complete';
                     // Add export buttons
                     var exportDiv = document.createElement('div');
