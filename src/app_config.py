@@ -13,6 +13,10 @@ from .models import AppConfig
 _ENV_VAR_MAP: dict[str, str] = {
     "GC_REGION": "gc_region",
     "GC_DEPLOYMENT_ID": "gc_deployment_id",
+    "GC_ORIGIN": "gc_origin",
+    "GC_CLIENT_ID": "gc_client_id",
+    "GC_CLIENT_SECRET": "gc_client_secret",
+    "GC_TESTER_CONVERSATIONS_FILE": "gc_conversations_file",
     "OLLAMA_BASE_URL": "ollama_base_url",
     "OLLAMA_MODEL": "ollama_model",
     "GC_TESTER_DEFAULT_ATTEMPTS": "default_attempts",
@@ -27,6 +31,7 @@ _FLOAT_FIELDS = {"success_threshold"}
 
 # Required fields that must be present for a test run
 _REQUIRED_FIELDS = ("gc_region", "gc_deployment_id", "ollama_model")
+_PLATFORM_REQUIRED_FIELDS = ("gc_region", "gc_client_id", "gc_client_secret")
 
 
 def _load_config_file() -> dict[str, Any]:
@@ -90,6 +95,13 @@ def load_app_config() -> AppConfig:
     Returns:
         A fully resolved AppConfig instance.
     """
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+
     # Start with config file values
     file_config = _load_config_file()
 
@@ -145,6 +157,23 @@ def validate_required_config(config: AppConfig) -> list[str]:
     """
     missing = []
     for field in _REQUIRED_FIELDS:
+        value = getattr(config, field)
+        if value is None:
+            missing.append(field)
+    return missing
+
+
+def validate_platform_config(config: AppConfig) -> list[str]:
+    """Return list of missing fields required for Platform API calls.
+
+    Args:
+        config: The AppConfig to validate.
+
+    Returns:
+        A list of field names that are missing (None). Empty list if all present.
+    """
+    missing = []
+    for field in _PLATFORM_REQUIRED_FIELDS:
         value = getattr(config, field)
         if value is None:
             missing.append(field)

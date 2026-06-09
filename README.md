@@ -21,7 +21,7 @@ pip install -r requirements.txt
 python3 -m src.web_app
 ```
 
-Open http://localhost:5000 in your browser. Fill in:
+Open http://localhost:8899 in your browser. Fill in:
 - **Deployment ID** — your Genesys Cloud Web Messaging deployment ID
 - **Region** — e.g., `mypurecloud.com`
 - **Ollama Model** — e.g., `llama3.2`
@@ -31,11 +31,38 @@ Open http://localhost:5000 in your browser. Fill in:
 ## Running via CLI
 
 ```bash
-python3 -m src.cli test_suite.yaml \
+python3 -m src.cli run test_suite.yaml \
   --region mypurecloud.com \
   --deployment-id YOUR_DEPLOYMENT_ID \
   --ollama-model llama3.2
 ```
+
+Backward-compatible form (suite path only) still works:
+
+```bash
+python3 -m src.cli test_suite.yaml
+```
+
+### Conversation cleanup commands
+
+After each attempt, the runner resolves the Genesys `conversationId` and disconnects it via Platform API. Active conversations are tracked in `.gc-tester/active_conversations.json`.
+
+```bash
+python3 -m src.cli conversations list
+python3 -m src.cli disconnect --id CONVERSATION_ID
+python3 -m src.cli disconnect --all
+```
+
+## VA test suites (from test-scripts)
+
+Pre-built suites grouped by reporter type live in [`test-suites/`](test-suites/):
+
+- `pch_test_suite.yaml` — Primary Cardholder (45 scenarios)
+- `poa_test_suite.yaml` — Power of Attorney (24 scenarios)
+- `atd_test_suite.yaml` / `atm_test_suite.yaml` — Authority to Disclose (19 scenarios)
+- `guardrail_test_suite.yaml` — Guardrail / unsupported (10 scenarios)
+
+Regenerate from markdown with `python3 scripts/convert_test_scripts_to_yaml.py`.
 
 ## Test Suite Format
 
@@ -65,12 +92,18 @@ scenarios:
 
 ## Configuration
 
-You can set defaults via environment variables or a `config.yaml` file:
+Copy `.env.example` to `.env`, fill in your Genesys deployment ID and region, then run the CLI or web app (values are loaded automatically via `python-dotenv`).
+
+You can also set defaults via environment variables or a `config.yaml` file:
 
 | Env Variable | Config Key | Description |
 |-------------|------------|-------------|
 | `GC_REGION` | `gc_region` | Genesys Cloud region |
 | `GC_DEPLOYMENT_ID` | `gc_deployment_id` | Web Messaging deployment ID |
+| `GC_ORIGIN` | `gc_origin` | WebSocket Origin header (e.g. `https://apps.mypurecloud.com`) |
+| `GC_CLIENT_ID` | `gc_client_id` | OAuth client ID for Platform API (conversation cleanup) |
+| `GC_CLIENT_SECRET` | `gc_client_secret` | OAuth client secret for Platform API |
+| `GC_TESTER_CONVERSATIONS_FILE` | `gc_conversations_file` | Path to active conversation registry (default: `.gc-tester/active_conversations.json`) |
 | `OLLAMA_BASE_URL` | `ollama_base_url` | Ollama URL (default: http://localhost:11434) |
 | `OLLAMA_MODEL` | `ollama_model` | Ollama model name |
 | `GC_TESTER_DEFAULT_ATTEMPTS` | `default_attempts` | Default attempts per scenario (default: 5) |
@@ -79,6 +112,15 @@ You can set defaults via environment variables or a `config.yaml` file:
 | `GC_TESTER_SUCCESS_THRESHOLD` | `success_threshold` | Regression threshold (default: 0.8) |
 
 Precedence: Web UI > Environment variables > config.yaml > defaults
+
+### Genesys OAuth app (Platform API)
+
+Create an OAuth client in Genesys Cloud (Client Credentials grant) with roles that allow:
+
+- `GET /api/v2/conversations/messages/{messageId}/details`
+- `POST /api/v2/conversations/{conversationId}/disconnect`
+
+Set `GC_CLIENT_ID` and `GC_CLIENT_SECRET` in `.env`. These are required for CLI test runs so conversations are cleaned up after each attempt.
 
 ## Results
 

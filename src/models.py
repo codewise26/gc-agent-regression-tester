@@ -44,6 +44,9 @@ class AppConfig(BaseModel):
     gc_region: Optional[str] = None
     gc_deployment_id: Optional[str] = None
     gc_origin: str = "https://localhost"
+    gc_client_id: Optional[str] = None
+    gc_client_secret: Optional[str] = None
+    gc_conversations_file: Optional[str] = None
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
@@ -99,6 +102,7 @@ class AttemptResult(BaseModel):
     conversation: list[Message]
     explanation: str
     error: Optional[str] = None  # Set if attempt failed due to error
+    conversation_id: Optional[str] = None
 
 
 class ScenarioResult(BaseModel):
@@ -136,6 +140,8 @@ class ProgressEventType(str, Enum):
 
     SUITE_STARTED = "suite_started"
     SCENARIO_STARTED = "scenario_started"
+    ATTEMPT_STARTED = "attempt_started"
+    DEBUG_STEP = "debug_step"
     ATTEMPT_COMPLETED = "attempt_completed"
     SCENARIO_COMPLETED = "scenario_completed"
     SUITE_COMPLETED = "suite_completed"
@@ -150,5 +156,6 @@ class ProgressEvent(BaseModel):
     success: Optional[bool] = None
     success_rate: Optional[float] = None
     message: str
+    detail: Optional[str] = None  # Extra context for debug_step / errors
     duration_seconds: Optional[float] = None
     attempt_result: Optional[AttemptResult] = None  # Full attempt data for live results

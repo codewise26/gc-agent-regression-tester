@@ -3,6 +3,7 @@
 import asyncio
 import json
 import uuid
+from dataclasses import dataclass
 from typing import Optional
 
 import websockets
@@ -12,6 +13,14 @@ class WebMessagingError(Exception):
     """Custom exception for Web Messaging connection and protocol errors."""
 
     pass
+
+
+@dataclass(frozen=True)
+class AgentMessage:
+    """Text and optional message ID from an agent WebSocket message."""
+
+    text: str
+    message_id: Optional[str] = None
 
 
 class WebMessagingClient:
@@ -96,11 +105,11 @@ class WebMessagingClient:
                 f"region={self.region}. Error: {e}"
             ) from e
 
-    async def wait_for_welcome(self) -> str:
+    async def wait_for_welcome(self) -> AgentMessage:
         """Wait for the agent's welcome message.
 
         Returns:
-            The text content of the agent's welcome message.
+            The agent's welcome message with optional message ID.
 
         Raises:
             TimeoutError: If no welcome message is received within the configured timeout.
@@ -112,8 +121,7 @@ class WebMessagingClient:
             )
 
         try:
-            text = await self._receive_agent_message()
-            return text
+            return await self._receive_agent_message()
         except asyncio.TimeoutError:
             raise TimeoutError(
                 f"Timed out waiting for welcome message after {self.timeout}s"
@@ -185,11 +193,11 @@ class WebMessagingClient:
                 f"region={self.region}. Error: {e}"
             ) from e
 
-    async def receive_response(self) -> str:
+    async def receive_response(self) -> AgentMessage:
         """Wait for and return the next agent response.
 
         Returns:
-            The text content of the agent's response message.
+            The agent's response message with optional message ID.
 
         Raises:
             TimeoutError: If no response is received within the configured timeout.
@@ -201,8 +209,7 @@ class WebMessagingClient:
             )
 
         try:
-            text = await self._receive_agent_message()
-            return text
+            return await self._receive_agent_message()
         except asyncio.TimeoutError:
             raise TimeoutError(
                 f"Timed out waiting for agent response after {self.timeout}s"
@@ -222,7 +229,30 @@ class WebMessagingClient:
                 self._ws = None
                 self._token = None
 
-    async def _receive_agent_message(self) -> str:
+    @staticmethod
+    def _extract_message_id(body: dict) -> Optional[str]:
+        """Extract message ID from a structured message body."""
+        message_id = body.get("id")
+        if message_id:
+            return str(message_id)
+
+        channel = body.get("channel")
+        if isinstance(channel, dict):
+            channel_id = channel.get("messageId")
+            if channel_id:
+                return str(channel_id)
+
+        return None
+
+    @staticmethod
+    def _build_agent_message(body: dict) -> Optional[AgentMessage]:
+        """Build an AgentMessage from a message body dict."""
+        text = body.get("text", "")
+        if not text:
+            return None
+        return AgentMessage(text=text, message_id=WebMessagingClient._extract_message_id(body))
+
+    async def _receive_agent_message(self) -> AgentMessage:
         """Wait for and extract text from the next agent message.
 
         Parses incoming WebSocket messages according to the Genesys Cloud
@@ -230,7 +260,7 @@ class WebMessagingClient:
         that contain agent text content.
 
         Returns:
-            The extracted text content from the agent's message.
+            The extracted agent message with optional message ID.
 
         Raises:
             asyncio.TimeoutError: If no agent message arrives within timeout.
@@ -271,28 +301,28 @@ class WebMessagingClient:
             # Look for agent messages in the "message" type responses
             if msg_type == "message" and msg_class == "StructuredMessage":
                 if isinstance(body, dict):
-                    text = body.get("text", "")
-                    if text:
-                        return text
+                    agent_message = self._build_agent_message(body)
+                    if agent_message:
+                        return agent_message
 
             # Also handle simpler response format
             if msg_type == "message":
                 # Try to extract text from body directly
                 body = data.get("body", "")
                 if isinstance(body, str) and body:
-                    return body
+                    return AgentMessage(text=body)
                 # Try nested text field
                 if isinstance(body, dict):
-                    text = body.get("text", "")
-                    if text:
-                        return text
+                    agent_message = self._build_agent_message(body)
+                    if agent_message:
+                        return agent_message
 
             # Handle "response" type messages (some protocol variants)
             if msg_type == "response":
                 body = data.get("body", {})
                 if isinstance(body, dict):
-                    text = body.get("text", "")
-                    if text:
-                        return text
+                    agent_message = self._build_agent_message(body)
+                    if agent_message:
+                        return agent_message
                 elif isinstance(body, str) and body:
-                    return body
+                    return AgentMessage(text=body)

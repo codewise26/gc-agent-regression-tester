@@ -15,7 +15,7 @@ from src.models import (
     MessageRole,
     TestScenario,
 )
-from src.web_messaging_client import WebMessagingError
+from src.web_messaging_client import AgentMessage, WebMessagingError
 
 
 @pytest.fixture
@@ -83,9 +83,13 @@ class TestRunAttemptSuccess:
         with patch("src.conversation_runner.WebMessagingClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.connect = AsyncMock()
-            mock_client.wait_for_welcome = AsyncMock(return_value="Hello! How can I help?")
+            mock_client.wait_for_welcome = AsyncMock(
+                return_value=AgentMessage(text="Hello! How can I help?")
+            )
             mock_client.send_message = AsyncMock()
-            mock_client.receive_response = AsyncMock(return_value="Sure, I can book that for you.")
+            mock_client.receive_response = AsyncMock(
+                return_value=AgentMessage(text="Sure, I can book that for you.")
+            )
             mock_client.disconnect = AsyncMock()
             MockClient.return_value = mock_client
 
@@ -114,7 +118,7 @@ class TestRunAttemptSuccess:
         with patch("src.conversation_runner.WebMessagingClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.connect = AsyncMock()
-            mock_client.wait_for_welcome = AsyncMock(return_value="Welcome!")
+            mock_client.wait_for_welcome = AsyncMock(return_value=AgentMessage(text="Welcome!"))
             mock_client.disconnect = AsyncMock()
             MockClient.return_value = mock_client
 
@@ -136,7 +140,7 @@ class TestRunAttemptSuccess:
         with patch("src.conversation_runner.WebMessagingClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.connect = AsyncMock()
-            mock_client.wait_for_welcome = AsyncMock(return_value="Hi")
+            mock_client.wait_for_welcome = AsyncMock(return_value=AgentMessage(text="Hi"))
             mock_client.disconnect = AsyncMock()
             MockClient.return_value = mock_client
 
@@ -163,9 +167,11 @@ class TestRunAttemptMaxTurns:
         with patch("src.conversation_runner.WebMessagingClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.connect = AsyncMock()
-            mock_client.wait_for_welcome = AsyncMock(return_value="Welcome!")
+            mock_client.wait_for_welcome = AsyncMock(return_value=AgentMessage(text="Welcome!"))
             mock_client.send_message = AsyncMock()
-            mock_client.receive_response = AsyncMock(return_value="Agent reply")
+            mock_client.receive_response = AsyncMock(
+                return_value=AgentMessage(text="Agent reply")
+            )
             mock_client.disconnect = AsyncMock()
             MockClient.return_value = mock_client
 
@@ -210,7 +216,7 @@ class TestRunAttemptErrors:
         with patch("src.conversation_runner.WebMessagingClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.connect = AsyncMock()
-            mock_client.wait_for_welcome = AsyncMock(return_value="Welcome!")
+            mock_client.wait_for_welcome = AsyncMock(return_value=AgentMessage(text="Welcome!"))
             mock_client.send_message = AsyncMock()
             mock_client.receive_response = AsyncMock(
                 side_effect=TimeoutError("Timed out waiting for agent response after 30s")
@@ -256,7 +262,7 @@ class TestRunAttemptErrors:
         with patch("src.conversation_runner.WebMessagingClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.connect = AsyncMock()
-            mock_client.wait_for_welcome = AsyncMock(return_value="Welcome!")
+            mock_client.wait_for_welcome = AsyncMock(return_value=AgentMessage(text="Welcome!"))
             mock_client.disconnect = AsyncMock()
             MockClient.return_value = mock_client
 
@@ -295,7 +301,9 @@ class TestRunAttemptConversationHistory:
         with patch("src.conversation_runner.WebMessagingClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.connect = AsyncMock()
-            mock_client.wait_for_welcome = AsyncMock(return_value="Welcome to support!")
+            mock_client.wait_for_welcome = AsyncMock(
+                return_value=AgentMessage(text="Welcome to support!")
+            )
             mock_client.disconnect = AsyncMock()
             MockClient.return_value = mock_client
 
@@ -321,10 +329,13 @@ class TestRunAttemptConversationHistory:
         with patch("src.conversation_runner.WebMessagingClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.connect = AsyncMock()
-            mock_client.wait_for_welcome = AsyncMock(return_value="Hello!")
+            mock_client.wait_for_welcome = AsyncMock(return_value=AgentMessage(text="Hello!"))
             mock_client.send_message = AsyncMock()
             mock_client.receive_response = AsyncMock(
-                side_effect=["Reply 1", "Reply 2"]
+                side_effect=[
+                    AgentMessage(text="Reply 1"),
+                    AgentMessage(text="Reply 2"),
+                ]
             )
             mock_client.disconnect = AsyncMock()
             MockClient.return_value = mock_client
@@ -355,9 +366,11 @@ class TestRunAttemptConversationHistory:
         with patch("src.conversation_runner.WebMessagingClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.connect = AsyncMock()
-            mock_client.wait_for_welcome = AsyncMock(return_value="Welcome!")
+            mock_client.wait_for_welcome = AsyncMock(return_value=AgentMessage(text="Welcome!"))
             mock_client.send_message = AsyncMock()
-            mock_client.receive_response = AsyncMock(return_value="Agent reply")
+            mock_client.receive_response = AsyncMock(
+                return_value=AgentMessage(text="Agent reply")
+            )
             mock_client.disconnect = AsyncMock()
             MockClient.return_value = mock_client
 

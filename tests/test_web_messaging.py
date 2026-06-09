@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.web_messaging_client import WebMessagingClient, WebMessagingError
+from src.web_messaging_client import AgentMessage, WebMessagingClient, WebMessagingError
 
 
 class TestWebMessagingClientInit:
@@ -107,12 +107,18 @@ class TestWebMessagingClientWaitForWelcome:
         welcome_msg = json.dumps({
             "type": "message",
             "class": "StructuredMessage",
-            "body": {"text": "Hello! How can I help you?"},
+            "body": {
+                "text": "Hello! How can I help you?",
+                "id": "welcome-msg-id",
+            },
         })
         client._ws.recv = AsyncMock(return_value=welcome_msg)
 
         result = await client.wait_for_welcome()
-        assert result == "Hello! How can I help you?"
+        assert result == AgentMessage(
+            text="Hello! How can I help you?",
+            message_id="welcome-msg-id",
+        )
 
     @pytest.mark.asyncio
     async def test_wait_for_welcome_timeout_raises(self):
@@ -196,12 +202,18 @@ class TestWebMessagingClientReceiveResponse:
         response_msg = json.dumps({
             "type": "message",
             "class": "StructuredMessage",
-            "body": {"text": "Sure, I can help with that."},
+            "body": {
+                "text": "Sure, I can help with that.",
+                "channel": {"messageId": "agent-msg-id"},
+            },
         })
         client._ws.recv = AsyncMock(return_value=response_msg)
 
         result = await client.receive_response()
-        assert result == "Sure, I can help with that."
+        assert result == AgentMessage(
+            text="Sure, I can help with that.",
+            message_id="agent-msg-id",
+        )
 
     @pytest.mark.asyncio
     async def test_receive_response_simple_body(self):
@@ -216,7 +228,7 @@ class TestWebMessagingClientReceiveResponse:
         client._ws.recv = AsyncMock(return_value=response_msg)
 
         result = await client.receive_response()
-        assert result == "Simple text response"
+        assert result == AgentMessage(text="Simple text response")
 
     @pytest.mark.asyncio
     async def test_receive_response_timeout_raises(self):
@@ -257,7 +269,7 @@ class TestWebMessagingClientReceiveResponse:
         client._ws.recv = AsyncMock(side_effect=[typing_msg, text_msg])
 
         result = await client.receive_response()
-        assert result == "Here is your answer."
+        assert result == AgentMessage(text="Here is your answer.")
 
 
 class TestWebMessagingClientDisconnect:

@@ -10,6 +10,7 @@ import yaml
 from src.app_config import (
     load_app_config,
     merge_config,
+    validate_platform_config,
     validate_required_config,
 )
 from src.models import AppConfig
@@ -253,3 +254,21 @@ class TestValidateRequiredConfig:
         )
         missing = validate_required_config(config)
         assert missing == ["ollama_model"]
+
+
+class TestValidatePlatformConfig:
+    def test_all_present(self):
+        config = AppConfig(
+            gc_region="mypurecloud.com",
+            gc_client_id="client-id",
+            gc_client_secret="client-secret",
+        )
+        assert validate_platform_config(config) == []
+
+    def test_all_missing(self):
+        config = AppConfig()
+        missing = validate_platform_config(config)
+        assert "gc_region" in missing
+        assert "gc_client_id" in missing
+        assert "gc_client_secret" in missing
+        assert len(missing) == 3

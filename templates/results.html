@@ -42,6 +42,25 @@
             display: inline-block; padding: 0.3rem 0.8rem; border-radius: 4px;
             font-weight: 600; font-size: 0.85rem; background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2;
         }
+        #debug-log {
+            background: #1a1a2e;
+            color: #c8e6c9;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            padding: 1rem;
+            border-radius: 4px;
+            max-height: 320px;
+            overflow-y: auto;
+            margin-bottom: 1.5rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .debug-line { margin-bottom: 0.35rem; line-height: 1.35; }
+        .debug-line .ts { color: #78909c; margin-right: 0.5rem; }
+        .debug-line .etype { color: #90caf9; margin-right: 0.4rem; }
+        .debug-line.debug-step .etype { color: #a5d6a7; }
+        .debug-line.attempt-start .etype { color: #fff59d; }
+        .debug-line.error-like { color: #ef9a9a; }
 </style>
 </head>
 <body>
@@ -119,6 +138,9 @@
                 <div class="stat-box"><div class="value" id="live-rate">-</div><div class="label">Success Rate</div></div>
             </div>
         </div>
+        <h2>Live debug log</h2>
+        <p style="font-size:0.85rem;color:#666;margin-top:0;">Step-by-step progress (Genesys WebSocket, Ollama, each turn). Replays events missed before this page loaded.</p>
+        <div id="debug-log" aria-live="polite"></div>
         <h2>All Attempts</h2>
         <div id="live-attempts-list"></div>
     </div>
@@ -151,6 +173,33 @@
             if (el) el.textContent = text;
         }
 
+        function scenarioId(name) {
+            return 'scenario-header-' + String(name).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 100);
+        }
+
+        function appendDebugLog(data) {
+            var log = document.getElementById('debug-log');
+            if (!log) return;
+            var line = document.createElement('div');
+            var etype = data.event_type || 'event';
+            line.className = 'debug-line';
+            if (etype === 'debug_step') line.className += ' debug-step';
+            if (etype === 'attempt_started') line.className += ' attempt-start';
+            if (data.success === false || (data.detail && /error|timeout|fail/i.test(data.detail))) {
+                line.className += ' error-like';
+            }
+            var ts = new Date().toLocaleTimeString();
+            var label = etype.replace(/_/g, ' ');
+            var text = data.message || '';
+            if (data.detail) text += ' — ' + data.detail;
+            if (data.scenario_name && etype === 'debug_step') {
+                text = '[' + data.scenario_name + (data.attempt_number ? ' #' + data.attempt_number : '') + '] ' + text;
+            }
+            line.innerHTML = '<span class="ts">' + ts + '</span><span class="etype">' + label + '</span>' + escapeHtml(text);
+            log.appendChild(line);
+            log.scrollTop = log.scrollHeight;
+        }
+
         function hideBanner() {
             var banner = document.getElementById('running-banner');
             if (banner) banner.style.display = 'none';
@@ -167,6 +216,7 @@
 
             evtSource.onmessage = function(event) {
                 var data = JSON.parse(event.data);
+                appendDebugLog(data);
 
                 if (data.event_type === 'suite_started') {
                     document.getElementById('live-suite-name').textContent = data.message;
@@ -175,27 +225,44 @@
 
                 if (data.event_type === 'scenario_started') {
                     currentScenario = data.scenario_name;
-                    updateRunningStatus('Running: ' + data.scenario_name);
+                    var shortName = data.scenario_name.length > 60
+                        ? data.scenario_name.slice(0, 57) + '…' : data.scenario_name;
+                    updateRunningStatus('Scenario: ' + shortName);
                     var h3 = document.createElement('h3');
-                    h3.id = 'scenario-header-' + currentScenario.replace(/\s+/g, '-');
+                    h3.id = scenarioId(currentScenario);
                     h3.textContent = currentScenario;
                     document.getElementById('live-attempts-list').appendChild(h3);
+                }
+
+                if (data.event_type === 'attempt_started') {
+                    updateRunningStatus(
+                        'Attempt ' + data.attempt_number + ': ' +
+                        (data.scenario_name && data.scenario_name.length > 50
+                            ? data.scenario_name.slice(0, 47) + '…' : data.scenario_name)
+                    );
+                }
+
+                if (data.event_type === 'debug_step') {
+                    updateRunningStatus(data.message);
                 }
 
                 if (data.event_type === 'attempt_completed' && data.attempt_result) {
                     totalAttempts++;
                     if (data.success) { totalSuccesses++; } else { totalFailures++; }
                     updateStats();
-                    updateRunningStatus('Running: ' + data.scenario_name + ' (attempt ' + data.attempt_number + ' done)');
+                    updateRunningStatus(
+                        (data.success ? 'OK' : 'FAIL') + ' attempt ' + data.attempt_number +
+                        (data.attempt_result.error ? ' — ' + data.attempt_result.error : '')
+                    );
                     renderAttempt(data.scenario_name, data.attempt_result);
                 }
 
                 if (data.event_type === 'scenario_completed') {
-                    var headerId = 'scenario-header-' + data.scenario_name.replace(/\s+/g, '-');
-                    var header = document.getElementById(headerId);
+                    var header = document.getElementById(scenarioId(data.scenario_name));
                     if (header) {
                         header.textContent = data.scenario_name + ' (' + Math.round(data.success_rate * 100) + '%)';
                     }
+                    updateRunningStatus('Finished scenario (' + Math.round(data.success_rate * 100) + '%)');
                 }
 
                 if (data.event_type === 'suite_completed') {
@@ -213,7 +280,13 @@
                 }
             };
 
-            evtSource.onerror = function() { evtSource.close(); };
+            evtSource.onerror = function() {
+                appendDebugLog({
+                    event_type: 'debug_step',
+                    message: 'SSE connection lost — refresh page if tests are still running',
+                });
+                evtSource.close();
+            };
         }
 
         function updateStats() {

@@ -25,7 +25,7 @@ from pydantic import ValidationError
 
 from .app_config import load_app_config, merge_config, validate_required_config
 from .config_loader import load_test_suite_from_string, validate_test_suite
-from .judge_llm import JudgeLLMClient
+from .judge_llm import JudgeLLMClient, JudgeLLMError
 from .models import AppConfig, TestReport
 from .orchestrator import TestOrchestrator
 from .progress import ProgressEmitter
@@ -138,8 +138,24 @@ def create_app() -> Flask:
                 errors=errors,
             )
 
+        # Verify Ollama before starting (same as CLI)
+        judge = JudgeLLMClient(
+            base_url=merged_config.ollama_base_url,
+            model=merged_config.ollama_model or "",
+            timeout=merged_config.response_timeout,
+        )
+        try:
+            judge.verify_connection()
+        except JudgeLLMError as e:
+            return render_template(
+                "home.html",
+                config=base_config,
+                errors=[f"Ollama: {e}"],
+            )
+
         # Create a fresh progress emitter for this run
         progress_emitter = ProgressEmitter()
+        progress_emitter.clear_history()
         app.config["progress_emitter"] = progress_emitter
         app.config["latest_report"] = None
         app.config["run_active"] = True
@@ -236,4 +252,5 @@ def create_app() -> Flask:
 
 
 if __name__ == "__main__":
-    create_app().run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("GC_TESTER_WEB_PORT", "8899"))
+    create_app().run(host="0.0.0.0", port=port, debug=True)

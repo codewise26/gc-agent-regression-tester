@@ -128,6 +128,26 @@ class TestProgressEmitterEmit:
         # Should not raise even with no subscribers
         emitter.emit(event)
 
+    def test_late_subscriber_receives_buffered_events(self):
+        emitter = ProgressEmitter()
+        e1 = _make_event(ProgressEventType.SUITE_STARTED, "suite")
+        e2 = _make_event(ProgressEventType.SCENARIO_STARTED, "scenario")
+        emitter.emit(e1)
+        emitter.emit(e2)
+        q = emitter.subscribe()
+        assert q.get_nowait() == e1
+        assert q.get_nowait() == e2
+        e3 = _make_event(ProgressEventType.DEBUG_STEP, "connecting")
+        emitter.emit(e3)
+        assert q.get_nowait() == e3
+
+    def test_clear_history_stops_replay(self):
+        emitter = ProgressEmitter()
+        emitter.emit(_make_event(ProgressEventType.SUITE_STARTED, "old"))
+        emitter.clear_history()
+        q = emitter.subscribe()
+        assert q.empty()
+
 
 class TestProgressEmitterThreadSafety:
     """Tests for thread-safe behavior."""

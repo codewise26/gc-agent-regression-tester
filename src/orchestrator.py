@@ -3,6 +3,7 @@
 import time
 from datetime import datetime, timezone
 
+from .conversation_registry import ConversationRegistry
 from .conversation_runner import ConversationRunner
 from .judge_llm import JudgeLLMClient
 from .models import (
@@ -14,6 +15,7 @@ from .models import (
     TestReport,
     TestSuite,
 )
+from .platform_api_client import PlatformApiClient
 from .progress import ProgressEmitter
 
 
@@ -72,10 +74,24 @@ class TestOrchestrator:
             "timeout": self.config.response_timeout,
             "origin": self.config.gc_origin,
         }
+        platform_client = None
+        if self.config.gc_client_id and self.config.gc_client_secret:
+            platform_client = PlatformApiClient(
+                region=self.config.gc_region or "",
+                client_id=self.config.gc_client_id,
+                client_secret=self.config.gc_client_secret,
+                timeout=self.config.response_timeout,
+            )
+        conversation_registry = ConversationRegistry(
+            file_path=self.config.gc_conversations_file
+        )
         runner = ConversationRunner(
             judge=judge,
             web_msg_config=web_msg_config,
             max_turns=self.config.max_turns,
+            progress_emitter=self.progress_emitter,
+            platform_client=platform_client,
+            conversation_registry=conversation_registry,
         )
 
         scenario_results: list[ScenarioResult] = []
@@ -95,6 +111,12 @@ class TestOrchestrator:
             successes = 0
 
             for attempt_num in range(1, attempt_count + 1):
+                self.progress_emitter.emit(ProgressEvent(
+                    event_type=ProgressEventType.ATTEMPT_STARTED,
+                    scenario_name=scenario.name,
+                    attempt_number=attempt_num,
+                    message=f"Attempt {attempt_num}/{attempt_count} started",
+                ))
                 result = await runner.run_attempt(scenario, attempt_num)
                 attempt_results.append(result)
 

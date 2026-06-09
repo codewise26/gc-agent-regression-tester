@@ -7,5 +7,10 @@ dist/
 build/
 .env
 config.yaml
+.gc-tester/
+ava-config/
+scripts/
+test-scripts/
+test-suites/
 *.db
 .DS_Store
